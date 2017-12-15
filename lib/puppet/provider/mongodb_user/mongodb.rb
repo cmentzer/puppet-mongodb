@@ -1,8 +1,9 @@
 require File.expand_path(File.join(File.dirname(__FILE__), '..', 'mongodb'))
-Puppet::Type.type(:mongodb_user).provide(:mongodb, parent: Puppet::Provider::Mongodb) do
-  desc 'Manage users for a MongoDB database.'
+Puppet::Type.type(:mongodb_user).provide(:mongodb, :parent => Puppet::Provider::Mongodb) do
 
-  defaultfor kernel: 'Linux'
+  desc "Manage users for a MongoDB database."
+
+  defaultfor :kernel => 'Linux'
 
   def self.instances
     require 'json'
@@ -16,26 +17,26 @@ Puppet::Type.type(:mongodb_user).provide(:mongodb, parent: Puppet::Provider::Mon
         dbs.each do |db|
           users = JSON.parse mongo_eval('printjson(db.system.users.find().toArray())', db)
 
-          allusers += users.map do |user|
-            new(name: user['_id'],
-                ensure: :present,
-                username: user['user'],
-                database: db,
-                roles: user['roles'].sort,
-                password_hash: user['pwd'])
+          allusers += users.collect do |user|
+              new(:name          => user['_id'],
+                  :ensure        => :present,
+                  :username      => user['user'],
+                  :database      => db,
+                  :roles         => user['roles'].sort,
+                  :password_hash => user['pwd'])
           end
         end
         return allusers
       else
         users = JSON.parse mongo_eval('printjson(db.system.users.find().toArray())')
 
-        users.map do |user|
-          new(name: user['_id'],
-              ensure: :present,
-              username: user['user'],
-              database: user['db'],
-              roles: from_roles(user['roles'], user['db']),
-              password_hash: user['credentials']['MONGODB-CR'])
+        users.collect do |user|
+            new(:name          => user['_id'],
+                :ensure        => :present,
+                :username      => user['user'],
+                :database      => user['db'],
+                :roles         => from_roles(user['roles'], user['db']),
+                :password_hash => user['credentials']['MONGODB-CR'])
         end
       end
     else
@@ -48,8 +49,9 @@ Puppet::Type.type(:mongodb_user).provide(:mongodb, parent: Puppet::Provider::Mon
   def self.prefetch(resources)
     users = instances
     resources.each do |name, resource|
-      provider = users.find { |user| user.username == (resource[:username]) && user.database == (resource[:database]) }
-      resources[name].provider = provider if provider
+      if provider = users.find { |user| user.username == resource[:username] and user.database == resource[:database] }
+        resources[name].provider = provider
+      end
     end
   end
 
@@ -58,37 +60,26 @@ Puppet::Type.type(:mongodb_user).provide(:mongodb, parent: Puppet::Provider::Mon
   def create
     if db_ismaster
       if mongo_24?
-        if @resource[:password_hash]
-          raise Puppet::Error, "password_hash can't be set on MongoDB older than 3.0; use password instead"
-        end
         user = {
-          user: @resource[:username],
-          pwd: @resource[:password],
-          roles: @resource[:roles]
+          :user => @resource[:username],
+          :pwd => @resource[:password_hash],
+          :roles => @resource[:roles]
         }
 
         mongo_eval("db.addUser(#{user.to_json})", @resource[:database])
       else
-        password_hash = @resource[:password_hash]
-
-        if password_hash
-        elsif @resource[:password]
-          password_hash = Puppet::Util::MongodbMd5er.md5(@resource[:username], @resource[:password])
-        end
-        cmd_json = <<-EOS.gsub(%r{^\s*}, '').gsub(%r{$\n}, '')
-	{
-	  "createUser": "#{@resource[:username]}",
-	  "pwd": "#{password_hash}",
-	  "customData": {"createdBy": "Puppet Mongodb_user['#{@resource[:name]}']"},
-	  "roles": #{@resource[:roles].to_json},
-	  "digestPassword": false
-	}
-	EOS
+        cmd_json=<<-EOS.gsub(/^\s*/, '').gsub(/$\n/, '')
+        {
+          "createUser": "#{@resource[:username]}",
+          "pwd": "#{@resource[:password_hash]}",
+          "customData": {"createdBy": "Puppet Mongodb_user['#{@resource[:name]}']"},
+          "roles": #{@resource[:roles].to_json},
+          "digestPassword": false
+        }
+        EOS
 
         mongo_eval("db.runCommand(#{cmd_json})", @resource[:database])
       end
-    else
-      Puppet.warning 'User creation is available only from master host'
 
       @property_hash[:ensure] = :present
       @property_hash[:username] = @resource[:username]
@@ -97,8 +88,11 @@ Puppet::Type.type(:mongodb_user).provide(:mongodb, parent: Puppet::Provider::Mon
       @property_hash[:roles] = @resource[:roles]
 
       exists? ? (return true) : (return false)
+    else
+      Puppet.warning 'User creation is available only from master host'
     end
   end
+
 
   def destroy
     if db_ismaster
@@ -113,12 +107,12 @@ Puppet::Type.type(:mongodb_user).provide(:mongodb, parent: Puppet::Provider::Mon
   end
 
   def exists?
-    !(@property_hash[:ensure] == :absent || @property_hash[:ensure].nil?)
+    !(@property_hash[:ensure] == :absent or @property_hash[:ensure].nil?)
   end
 
-  def password_hash=(_value)
+  def password_hash=(value)
     if db_ismaster
-      cmd_json = <<-EOS.gsub(%r{^\s*}, '').gsub(%r{$\n}, '')
+      cmd_json=<<-EOS.gsub(/^\s*/, '').gsub(/$\n/, '')
       {
           "updateUser": "#{@resource[:username]}",
           "pwd": "#{@resource[:password_hash]}",
@@ -131,34 +125,18 @@ Puppet::Type.type(:mongodb_user).provide(:mongodb, parent: Puppet::Provider::Mon
     end
   end
 
-  def password=(value)
-    if mongo_24?
-      mongo_eval("db.changeUserPassword('#{@resource[:username]}','#{value}')", @resource[:database])
-    else
-      cmd_json = <<-EOS.gsub(%r{^\s*}, '').gsub(%r{$\n}, '')
-      {
-          "updateuser": "#{@resource[:username]}",
-          "pwd": "#{@resource[:password]}",
-          "digestpassword": true
-      }
-      EOS
-
-      mongo_eval("db.runCommand(#{cmd_json})", @resource[:database])
-    end
-  end
-
   def roles=(roles)
     if db_ismaster
       if mongo_24?
         mongo_eval("db.system.users.update({user:'#{@resource[:username]}'}, { $set: {roles: #{@resource[:roles].to_json}}})")
       else
-        grant = roles - @property_hash[:roles]
-        unless grant.empty?
+        grant = roles-@property_hash[:roles]
+        if grant.length > 0
           mongo_eval("db.getSiblingDB('#{@resource[:database]}').grantRolesToUser('#{@resource[:username]}', #{grant. to_json})")
         end
 
-        revoke = @property_hash[:roles] - roles
-        unless revoke.empty?
+        revoke = @property_hash[:roles]-roles
+        if revoke.length > 0
           mongo_eval("db.getSiblingDB('#{@resource[:database]}').revokeRolesFromUser('#{@resource[:username]}', #{revoke.to_json})")
         end
       end
@@ -171,11 +149,12 @@ Puppet::Type.type(:mongodb_user).provide(:mongodb, parent: Puppet::Provider::Mon
 
   def self.from_roles(roles, db)
     roles.map do |entry|
-      if entry['db'] == db
-        entry['role']
-      else
-        "#{entry['role']}@#{entry['db']}"
-      end
+        if entry['db'] == db
+            entry['role']
+        else
+            "#{entry['role']}@#{entry['db']}"
+        end
     end.sort
   end
+
 end

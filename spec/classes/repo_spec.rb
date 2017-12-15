@@ -1,6 +1,7 @@
 require 'spec_helper'
 
-describe 'mongodb::repo', type: :class do
+describe 'mongodb::repo', :type => :class do
+
   context 'when deploying on Debian' do
     with_debian_facts
 
@@ -22,34 +23,21 @@ describe 'mongodb::repo', type: :class do
 
     let :params do
       {
-        proxy: 'http://proxy-server:8080',
-        proxy_username: 'proxyuser1',
-        proxy_password: 'proxypassword1'
+        :proxy => 'http://proxy-server:8080',
+        :proxy_username => 'proxyuser1',
+        :proxy_password => 'proxypassword1',
       }
     end
-
     it {
       is_expected.to contain_class('mongodb::repo::yum')
     }
     it do
-      is_expected.to contain_yumrepo('mongodb').with('enabled' => '1',
-                                                     'proxy' => 'http://proxy-server:8080',
-                                                     'proxy_username' => 'proxyuser1',
-                                                     'proxy_password' => 'proxypassword1')
+      should contain_yumrepo('mongodb').with({
+        'enabled' => '1',
+        'proxy' => 'http://proxy-server:8080',
+        'proxy_username' => 'proxyuser1',
+        'proxy_password' => 'proxypassword1',
+        })
     end
-  end
-
-  context 'when deploying on CentOS with version >= 3.0' do
-    with_centos_facts
-
-    let :params do
-      {
-        version: '3.4.7-1.el7'
-      }
-    end
-
-    it {
-      is_expected.to contain_class('mongodb::repo::yum')
-    }
   end
 end

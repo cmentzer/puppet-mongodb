@@ -1,16 +1,17 @@
 require File.expand_path(File.join(File.dirname(__FILE__), '..', 'mongodb'))
-Puppet::Type.type(:mongodb_database).provide(:mongodb, parent: Puppet::Provider::Mongodb) do
-  desc 'Manages MongoDB database.'
+Puppet::Type.type(:mongodb_database).provide(:mongodb, :parent => Puppet::Provider::Mongodb) do
 
-  defaultfor kernel: 'Linux'
+  desc "Manages MongoDB database."
+
+  defaultfor :kernel => 'Linux'
 
   def self.instances
     require 'json'
     dbs = JSON.parse mongo_eval('printjson(db.getMongo().getDBs())')
 
-    dbs['databases'].map do |db|
-      new(name: db['name'],
-          ensure: :present)
+    dbs['databases'].collect do |db|
+      new(:name   => db['name'],
+          :ensure => :present)
     end
   end
 
@@ -18,8 +19,9 @@ Puppet::Type.type(:mongodb_database).provide(:mongodb, parent: Puppet::Provider:
   def self.prefetch(resources)
     dbs = instances
     resources.keys.each do |name|
-      provider = dbs.find { |db| db.name == name }
-      resources[name].provider = provider if provider
+      if provider = dbs.find { |db| db.name == name }
+        resources[name].provider = provider
+      end
     end
   end
 
@@ -40,6 +42,7 @@ Puppet::Type.type(:mongodb_database).provide(:mongodb, parent: Puppet::Provider:
   end
 
   def exists?
-    !(@property_hash[:ensure] == :absent || @property_hash[:ensure].nil?)
+    !(@property_hash[:ensure] == :absent or @property_hash[:ensure].nil?)
   end
+
 end

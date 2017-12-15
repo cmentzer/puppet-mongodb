@@ -9,22 +9,19 @@ class mongodb::repo (
 ) inherits mongodb::params {
   case $::osfamily {
     'RedHat', 'Linux': {
-      if $version != undef {
-        $mongover = split($version, '[.]')
-      }
       if ($repo_location != undef){
         $location = $repo_location
         $description = 'MongoDB Custom Repository'
       } elsif $mongodb::globals::use_enterprise_repo == true {
-        $location = "https://repo.mongodb.com/yum/redhat/\$releasever/mongodb-enterprise/${mongover[0]}.${mongover[1]}/\$basearch/"
+        $location = 'https://repo.mongodb.com/yum/redhat/$releasever/mongodb-enterprise/stable/$basearch/'
         $description = 'MongoDB Enterprise Repository'
       }
       elsif $version and (versioncmp($version, '3.0.0') >= 0) {
+        $mongover = split($version, '[.]')
         $location = $::architecture ? {
           'x86_64' => "http://repo.mongodb.org/yum/redhat/${::operatingsystemmajrelease}/mongodb-org/${mongover[0]}.${mongover[1]}/x86_64/",
           default  => undef
         }
-        $description = 'MongoDB Repository'
       }
       else {
         $location = $::architecture ? {
@@ -36,7 +33,7 @@ class mongodb::repo (
         $description = 'MongoDB/10gen Repository'
       }
 
-      class { 'mongodb::repo::yum': }
+      class { '::mongodb::repo::yum': }
     }
 
     'Debian': {
@@ -81,7 +78,7 @@ class mongodb::repo (
         $key         = '492EAFE8CD016A07919F1D2B9ECBEC467F0CEB10'
         $key_server  = 'hkp://keyserver.ubuntu.com:80'
       }
-      class { 'mongodb::repo::apt': }
+      class { '::mongodb::repo::apt': }
     }
 
     default: {

@@ -1,65 +1,37 @@
 require 'puppetlabs_spec_helper/rake_tasks'
+require 'puppet-lint/tasks/puppet-lint'
+require 'puppet_blacksmith/rake_tasks' if Bundler.rubygems.find_name('puppet-blacksmith').any?
 
-# load optional tasks for releases
-# only available if gem group releases is installed
-begin
-  require 'puppet_blacksmith/rake_tasks'
-  require 'voxpupuli/release/rake_tasks'
-  require 'puppet-strings/tasks'
-rescue LoadError
-end
-
-PuppetLint.configuration.log_format = '%{path}:%{line}:%{check}:%{KIND}:%{message}'
 PuppetLint.configuration.fail_on_warnings = true
 PuppetLint.configuration.send('relative')
-PuppetLint.configuration.send('disable_140chars')
-PuppetLint.configuration.send('disable_class_inherits_from_params_class')
-PuppetLint.configuration.send('disable_documentation')
-PuppetLint.configuration.send('disable_single_quote_string_with_variables')
 
-exclude_paths = %w(
-  pkg/**/*
-  vendor/**/*
-  .vendor/**/*
-  spec/**/*
-)
-PuppetLint.configuration.ignore_paths = exclude_paths
-PuppetSyntax.exclude_paths = exclude_paths
+desc 'Generate pooler nodesets'
+task :gen_nodeset do
+  require 'beaker-hostgenerator'
+  require 'securerandom'
+  require 'fileutils'
 
-desc 'Run acceptance tests'
-RSpec::Core::RakeTask.new(:acceptance) do |t|
-  t.pattern = 'spec/acceptance'
-end
-
-desc 'Run tests metadata_lint, release_checks'
-task test: [
-  :metadata_lint,
-  :release_checks,
-]
-
-desc "Run main 'test' task and report merged results to coveralls"
-task test_with_coveralls: [:test] do
-  if Dir.exist?(File.expand_path('../lib', __FILE__))
-    require 'coveralls/rake/task'
-    Coveralls::RakeTask.new
-    Rake::Task['coveralls:push'].invoke
-  else
-    puts 'Skipping reporting to coveralls.  Module has no lib dir'
+  agent_target = ENV['TEST_TARGET']
+  if ! agent_target
+    STDERR.puts 'TEST_TARGET environment variable is not set'
+    STDERR.puts 'setting to default value of "redhat-64default."'
+    agent_target = 'redhat-64default.'
   end
-end
 
-begin
-  require 'github_changelog_generator/task'
-  GitHubChangelogGenerator::RakeTask.new :changelog do |config|
-    version = (Blacksmith::Modulefile.new).version
-    config.future_release = "v#{version}" if version =~ /^\d+\.\d+.\d+$/
-    config.header = "# Changelog\n\nAll notable changes to this project will be documented in this file.\nEach new release typically also includes the latest modulesync defaults.\nThese should not affect the functionality of the module."
-    config.exclude_labels = %w{duplicate question invalid wontfix wont-fix modulesync skip-changelog}
-    config.user = 'voxpupuli'
-    metadata_json = File.join(File.dirname(__FILE__), 'metadata.json')
-    metadata = JSON.load(File.read(metadata_json))
-    config.project = metadata['name']
+  master_target = ENV['MASTER_TEST_TARGET']
+  if ! master_target
+    STDERR.puts 'MASTER_TEST_TARGET environment variable is not set'
+    STDERR.puts 'setting to default value of "redhat7-64mdcl"'
+    master_target = 'redhat7-64mdcl'
   end
-rescue LoadError
+
+  targets = "#{master_target}-#{agent_target}"
+  cli = BeakerHostGenerator::CLI.new([targets])
+  nodeset_dir = "tmp/nodesets"
+  nodeset = "#{nodeset_dir}/#{targets}-#{SecureRandom.uuid}.yaml"
+  FileUtils.mkdir_p(nodeset_dir)
+  File.open(nodeset, 'w') do |fh|
+    fh.print(cli.execute)
+  end
+  puts nodeset
 end
-# vim: syntax=ruby

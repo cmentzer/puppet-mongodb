@@ -1,16 +1,14 @@
-require File.expand_path(File.join(File.dirname(__FILE__), '..', '..', 'util', 'mongodb_md5er'))
+require 'digest/md5'
 
 module Puppet::Parser::Functions
-  newfunction(:mongodb_password, type: :rvalue, doc: <<-EOS
+  newfunction(:mongodb_password, :type => :rvalue, :doc => <<-EOS
     Returns the mongodb password hash from the clear text password.
     EOS
-             ) do |args|
+  ) do |args|
 
-    if args.size != 2
-      raise(Puppet::ParseError, 'mongodb_password(): Wrong number of arguments ' \
-        "given (#{args.size} for 2)")
-    end
+    raise(Puppet::ParseError, 'mongodb_password(): Wrong number of arguments ' +
+      "given (#{args.size} for 2)") if args.size != 2
 
-    Puppet::Util::MongodbMd5er.md5(args[0], args[1])
+    Digest::MD5.hexdigest("#{args[0]}:mongo:#{args[1]}")
   end
 end

@@ -1,6 +1,7 @@
 require 'spec_helper'
 
-describe 'mongodb::mongos::install', type: :class do
+describe 'mongodb::mongos::install', :type => :class do
+
   describe 'it should include package' do
     with_debian_facts
 
@@ -12,8 +13,11 @@ describe 'mongodb::mongos::install', type: :class do
     end
 
     it {
-      is_expected.to contain_package('mongodb_mongos').with(ensure: 'present',
-                                                            name: 'mongo-foo')
+      is_expected.to contain_package('mongodb_mongos').with({
+        :ensure => 'present',
+        :name   => 'mongo-foo',
+      })
     }
   end
+
 end

@@ -1,6 +1,7 @@
 require 'spec_helper'
 
-describe 'mongodb::mongos::service', type: :class do
+describe 'mongodb::mongos::service', :type => :class do
+
   context 'on Debian with service_manage set to true' do
     with_debian_facts
 
@@ -17,6 +18,7 @@ describe 'mongodb::mongos::service', type: :class do
     describe 'configure the mongos service' do
       it { is_expected.to contain_service('mongos') }
     end
+
   end
 
   context 'on Debian with service_manage set to false' do
@@ -30,8 +32,9 @@ describe 'mongodb::mongos::service', type: :class do
     end
 
     describe 'configure the mongos service' do
-      it { is_expected.not_to contain_service('mongos') }
+      it { should_not contain_service('mongos') }
     end
+
   end
 
   context 'on RedHat with service_manage set to true' do
@@ -54,6 +57,7 @@ describe 'mongodb::mongos::service', type: :class do
     describe 'configure the mongos service' do
       it { is_expected.to contain_service('mongos') }
     end
+
   end
 
   context 'on RedHat with service_manage set to false' do
@@ -67,7 +71,10 @@ describe 'mongodb::mongos::service', type: :class do
     end
 
     describe 'configure the mongos service' do
-      it { is_expected.not_to contain_service('mongos') }
+      it { should_not contain_service('mongos') }
     end
+
   end
+
+
 end
